@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Carte Choroplèthe des Niveaux d’Éducation aux États-Unis</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f4f4f4;
+      text-align: center;
+    }
+
+    #container {
+      width: 80%;
+      margin: 0 auto;
+      padding-top: 30px;
+    }
+
+    #title {
+      font-size: 2em;
+    }
+
+    #description {
+      font-size: 1.2em;
+      color: #555;
+      margin-bottom: 20px;
+    }
+
+    #choropleth-map {
+      width: 100%;
+      height: 500px;
+    }
+
+    #legend {
+      margin-top: 20px;
+      padding: 10px;
+      background-color: #fff;
+      border: 1px solid #ddd;
+    }
+
+    #legend-keys {
+      display: flex;
+      justify-content: space-between;
+    }
+
+    #tooltip {
+      position: absolute;
+      background-color: rgba(0, 0, 0, 0.7);
+      color: white;
+      padding: 5px;
+      border-radius: 3px;
+      visibility: hidden;
+    }
+
+    .hidden {
+      visibility: hidden;
+    }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <h1 id="title">Carte Choroplèthe des Niveaux d’Éducation aux États-Unis</h1>
+    <p id="description">Cette carte choroplèthe visualise les taux de scolarisation des comtés des États-Unis.</p>
+    <svg id="choropleth-map"></svg>
+    <div id="legend">
+      <h2>Légende</h2>
+      <div id="legend-keys"></div>
+    </div>
+    <div id="tooltip" class="hidden"></div>
+  </div>
+
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script src="https://cdn.freecodecamp.org/testable-projects-fcc/v1/bundle.js"></script>
+  <script>
+    const width = 900;
+    const height = 600;
+
+    const svg = d3.select("#choropleth-map")
+                  .attr("width", width)
+                  .attr("height", height);
+
+    const tooltip = d3.select("#tooltip");
+
+    const colorScale = d3.scaleThreshold()
+      .domain([0, 20, 40, 60, 80, 100])
+      .range(["#f7fbff", "#deebf7", "#c6dbef", "#9ecae1", "#6baed6", "#3182bd"]);
+
+    // Charger les données géographiques et les données d'éducation
+    Promise.all([
+      d3.json("https://cdn.freecodecamp.org/testable-projects-fcc/data/choropleth_map/counties.json"),
+      d3.json("https://cdn.freecodeCamp.org/testable-projects-fcc/data/choropleth_map/for_user_education.json")
+    ]).then(data => {
+      const counties = data[0];
+      const educationData = data[1];
+
+      // Créer un objet pour accéder facilement aux données d'éducation par FIPS
+      const educationByCounty = {};
+      educationData.forEach(d => {
+        educationByCounty[d.fips] = d;
+      });
+
+      // Créer la projection géographique
+      const projection = d3.geoAlbersUsa().scale(1200).translate([width / 2, height / 2]);
+
+      // Créer un générateur de chemin pour les comtés
+      const path = d3.geoPath().projection(projection);
+
+      // Dessiner les comtés
+      svg.selectAll(".county")
+        .data(topojson.feature(counties, counties.objects.counties).features)
+        .enter()
+        .append("path")
+        .attr("class", "county")
+        .attr("d", path)
+        .attr("data-fips", d => d.id)
+        .attr("data-education", d => educationByCounty[d.id] ? educationByCounty[d.id].bachelorsOrHigher : 0)
+        .style("fill", d => {
+          const education = educationByCounty[d.id] ? educationByCounty[d.id].bachelorsOrHigher : 0;
+          return colorScale(education);
+        })
+        .on("mouseover", function(event, d) {
+          const county = educationByCounty[d.id];
+          tooltip.transition().duration(200).style("visibility", "visible");
+          tooltip.html(`${county.area_name}, ${county.state}: ${county.bachelorsOrHigher}%`)
+                 .attr("data-education", county.bachelorsOrHigher)
+                 .style("left", event.pageX + "px")
+                 .style("top", event.pageY - 28 + "px");
+        })
+        .on("mouseout", function() {
+          tooltip.transition().duration(200).style("visibility", "hidden");
+        });
+
+      // Ajouter la légende
+      const legend = d3.select("#legend-keys")
+                       .selectAll("div")
+                       .data(colorScale.range())
+                       .enter()
+                       .append("div")
+                       .style("background-color", d => d)
+                       .style("width", "20px")
+                       .style("height", "20px")
+                       .style("margin-right", "5px");
+
+      // Ajouter les étiquettes de la légende
+      const legendLabels = ["0%", "20%", "40%", "60%", "80%", "100%"];
+      legendLabels.forEach((label, i) => {
+        d3.select("#legend-keys")
+          .append("span")
+          .text(label)
+          .style("margin-right", "15px");
+      });
+    });
+  </script>
+</body>
+</html>
